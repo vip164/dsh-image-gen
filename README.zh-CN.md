@@ -87,6 +87,10 @@ pnpm dsh web
 3. 填写 **API Key**（写入 credentials，默认引用 `IMAGE_GEN_API_KEY`）。
 4. 可选：修改 **模型**（默认 `gpt-image-2`）、**图生图端点**、**超时**。
 5. 保存后即可在对话中使用 `image-generate` / `image-edit` 工具。
+![img.png](assets/settings.png)
+
+## 使用效果
+![use-case.png](assets/use-case.png)
 
 ## 开发
 
