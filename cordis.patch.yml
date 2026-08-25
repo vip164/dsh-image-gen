@@ -1,0 +1,4 @@
+# Mount the host and Web client halves of the image generation plugin.
+- insert:
+    - id: image-gen
+      name: dsh-image-gen
