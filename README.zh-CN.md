@@ -24,31 +24,6 @@
 - API Key 只写入 DSH credentials（默认引用 `IMAGE_GEN_API_KEY`），不回显、不进设置文档。
 - 对配置写入、响应大小、超时和参考图文件实施校验；524 / 超时不会自动重试，避免重复计费。
 
-## 关于 bug 修复
-
-原插件在浏览器侧把设置卡片注册到了 `settings.plugin.item` 这个 **keyed slot**，
-却使用了 `id` 而不是 `key`，导致加载时报错：
-
-```text
-Failed to load plugins
-dsh-image2-draw
-failed to apply loader entry ... (dsh-image2-draw): keyed slot "settings.plugin.item" requires options.key
-```
-
-该 slot 的契约是：**以它编辑的 settings 命名空间作为 `key`**。本插件的修复是：
-
-```js
-ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-  name: 'settings.plugin.item',
-  key: NS,            // ← 必须是 settings 命名空间（image-gen），不能用 id
-  locale: 'settings.imageGen',
-  inject: () => ({ api: connection.api, remote: ctx.remote, t }),
-}, ImageGenCard))
-```
-
-其中 `NS === 'image-gen'`，与 host 侧 `installSettingsSection` 注册的命名空间完全一致，
-“可配置插件”页签才能把卡片和它编辑的命名空间配对起来。
-
 ## 安装
 
 ### 环境准备
@@ -87,6 +62,7 @@ pnpm dsh web
 3. 填写 **API Key**（写入 credentials，默认引用 `IMAGE_GEN_API_KEY`）。
 4. 可选：修改 **模型**（默认 `gpt-image-2`）、**图生图端点**、**超时**。
 5. 保存后即可在对话中使用 `image-generate` / `image-edit` 工具。
+
 ![img.png](assets/settings.png)
 
 ## 使用效果
