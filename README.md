@@ -29,33 +29,6 @@ text-to-image and image-to-image tools directly in conversation.
 - Validates config writes, response sizes, timeouts, and reference files; 524/timeout
   is not auto-retried to avoid duplicate billing.
 
-## Bug fix
-
-The original plugin registered its settings card into the **keyed** slot
-`settings.plugin.item` using `id` instead of `key`, producing:
-
-```text
-Failed to load plugins
-dsh-image2-draw
-failed to apply loader entry ... (dsh-image2-draw): keyed slot "settings.plugin.item" requires options.key
-```
-
-That slot's contract is: **key by the settings namespace the card edits**. This plugin
-uses the namespace as the key:
-
-```js
-ctx.slots.inject('settings.plugin.item', () => ctx.slots.register({
-  name: 'settings.plugin.item',
-  key: NS,            // the settings namespace (image-gen), not `id`
-  locale: 'settings.imageGen',
-  inject: () => ({ api: connection.api, remote: ctx.remote, t }),
-}, ImageGenCard))
-```
-
-`NS === 'image-gen'` matches the namespace registered on the Host via
-`installSettingsSection`, so the configurable-plugins tab pairs the card with the
-namespace it edits.
-
 ## Install
 
 ### Prerequisites
@@ -88,6 +61,11 @@ pnpm dsh web
 3. Fill in **API Key** (stored in credentials, default ref `IMAGE_GEN_API_KEY`).
 4. Optionally adjust **Model** (default `gpt-image-2`), **Edit endpoint**, or **Timeout**.
 5. Save, then use `image-generate` / `image-edit` in conversation.
+
+![settings.png](assets/settings.png)
+
+## Use Case
+![use-case.png](assets/use-case.png)
 
 ## Development
 

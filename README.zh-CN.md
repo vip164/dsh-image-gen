@@ -65,7 +65,7 @@ pnpm dsh web
 
 ![img.png](assets/settings.png)
 
-## 使用效果
+## 使用案例
 ![use-case.png](assets/use-case.png)
 
 ## 开发
