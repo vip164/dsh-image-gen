@@ -13,16 +13,16 @@ assert.equal(manifest.files.includes('cordis.patch.yml'), true)
 assert.equal(manifest.files.includes('LICENSE'), true)
 assert.equal(manifest.files.includes('THIRD_PARTY_NOTICES.md'), true)
 assert.equal(manifest.dsh.client.platform, 'web')
-assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-settings-plugins'), true)
+assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-plugin-manager'), true)
 assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-tool'), true)
-assert.equal(manifest.dependencies['@deepseek-ai/schemastery'], '3.18.1')
-assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '4.0.1')
-assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-attachment'], '0.1.1-rc.2')
-assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-credentials'], '0.1.1-rc.2')
-assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-settings'], '0.1.1-rc.2')
-assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-tools'], '0.1.1-rc.2')
+assert.equal(manifest.dependencies['@deepseek-ai/schemastery'], '~3.18.5')
+assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '~4.0.5')
+assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-attachment'], '0.2.1-rc.2')
+assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-credentials'], '0.2.1-rc.2')
+assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-settings'], '0.2.1-rc.2')
+assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-tools'], '0.2.1-rc.2')
 assert.equal(
-  await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8'),
+  (await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
   '# Mount the host and Web client halves of the image generation plugin.\n'
     + '- insert:\n'
     + '    - id: image-gen\n'
@@ -131,7 +131,13 @@ assert.equal(client.imageFilenameOf({ mediaType: 'image/webp' }, 1), 'image-gen-
 
 const clientRegistrations = []
 plugin.apply({
-  remote: {},
+  remote: {
+    $on() { return () => {} },
+    credentials: {
+      async describe() { return { ok: true, value: {} } },
+      async set() { return { ok: true } },
+    },
+  },
   locale: {
     register() { return () => {} },
     bind() { return key => key },
@@ -143,11 +149,7 @@ plugin.apply({
       return () => {}
     },
   },
-  get(service) {
-    if (service === 'connection') return { api: {} }
-    if (service === 'conversation') return { resolveImage: async () => 'blob:image' }
-    return undefined
-  },
+  get() { return undefined },
   effect(callback) { return callback() },
 })
 assert.deepEqual(
@@ -155,11 +157,11 @@ assert.deepEqual(
   ['image-generate', 'image-edit'],
 )
 
-// 关键回归：settings.plugin.item 是 keyed slot，必须以 settings 命名空间作为 key，
-// 不能用 id —— 否则加载时抛 “keyed slot "settings.plugin.item" requires options.key”。
-const settingsCard = clientRegistrations.find(entry => entry.meta.name === 'settings.plugin.item')
-assert.ok(settingsCard, 'settings.plugin.item 卡片已注册')
-assert.equal(settingsCard.meta.key, 'image-gen')
+// 关键回归：第三方插件配置页注册进 plugins.row.config，key 必须是 `<包名>#<行 id>`，
+// 与 cordis.patch.yml 的行 id 对应 —— 否则行不会出现「配置」控件。
+const settingsCard = clientRegistrations.find(entry => entry.meta.name === 'plugins.row.config')
+assert.ok(settingsCard, 'plugins.row.config 卡片已注册')
+assert.equal(settingsCard.meta.key, 'dsh-image-gen#image-gen')
 assert.equal(settingsCard.meta.id, undefined)
 
 /* ---------------------------- 纯函数 ---------------------------- */
@@ -465,18 +467,21 @@ const httpCurrent = () => httpValue
 
 /* ------------------------------ apply ------------------------------ */
 
-function schemaStub() {
-  const fn = () => stub
-  const stub = new Proxy(fn, {
-    get: () => fn,
-    apply: () => stub,
-    construct: () => stub,
-  })
-  return stub
-}
+// Config 是 cordis 运行期读取的插件 schema：可编辑字段标 volatile，
+// apiKey 只允许组合层字面值，不进入表单投影。
+assert.equal(typeof server.Config?.toJSON, 'function')
+assert.equal(server.Config.dict.baseURL.meta.volatile, true)
+assert.equal(server.Config.dict.apiKeyEnv.meta.volatile, true)
+assert.equal(server.Config.dict.apiKeyEnv.meta.default, 'IMAGE_GEN_API_KEY')
+assert.equal(server.Config.dict.timeoutSeconds.meta.default, 180)
+assert.equal(server.Config.dict.apiKey.meta.volatile, undefined)
 
 let scopeValue = {}
-const installCalls = []
+// volatile 字段在运行期是 live ref（{ get() }）；用代理让每个字段读都落到 scopeValue。
+const liveConfig = new Proxy({}, {
+  get: (_target, key) => ({ get: () => scopeValue[key] }),
+})
+const configureCalls = []
 const registrations = { tools: [], routes: [] }
 const pendingInjections = []
 const applyCtx = {
@@ -498,6 +503,7 @@ const applyCtx = {
         describe() { return [{ ns: 'image-gen', revision: 1 }] },
         writable: true,
         async mutate() {},
+        configure(policy) { configureCalls.push(policy); return () => {} },
       }
     }
     return undefined
@@ -512,19 +518,12 @@ const applyCtx = {
   },
 }
 
-await server.apply(applyCtx, {}, {
-  Schema: schemaStub(),
+await server.apply(applyCtx, liveConfig, {
   defineTool: definition => definition,
-  installSettingsSection: (ctx, ns, schema, entry, hooks) => {
-    installCalls.push({ ns, schema, entry, hooks })
-    hooks.setSource(() => scopeValue)
-  },
 })
 
-assert.equal(installCalls.length, 1)
-assert.equal(installCalls[0].ns, 'image-gen')
-assert.equal(typeof installCalls[0].hooks.validate, 'function')
-assert.throws(() => installCalls[0].hooks.validate({ timeoutSeconds: 0 }), /1~3600/)
+// 配置页由浏览器半自绘，平台的自动表单对本 entry 关闭。
+assert.deepEqual(configureCalls, [{ auto: false }])
 assert.deepEqual(registrations.tools.map(tool => tool.name), ['image-generate', 'image-edit'])
 assert.equal(registrations.routes.length, 0)
 assert.deepEqual(pendingInjections.map(entry => entry.services), [['webServer']])
@@ -603,6 +602,7 @@ const realTools = []
 await server.apply({
   tools: { register(value) { realTools.push(value) } },
   credentials: { async resolve() { return undefined } },
+  get() { return undefined },
   inject() {},
   effect(callback) { return callback() },
 }, {})
