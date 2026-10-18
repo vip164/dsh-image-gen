@@ -14,7 +14,7 @@ assert.equal(manifest.files.includes('LICENSE'), true)
 assert.equal(manifest.files.includes('THIRD_PARTY_NOTICES.md'), true)
 assert.equal(manifest.dsh.client.platform, 'web')
 assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-plugin-manager'), true)
-assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-tool'), true)
+assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-tool'), false)
 assert.equal(manifest.dependencies['@deepseek-ai/schemastery'], '~3.18.5')
 assert.equal(manifest.dependencies['@wisdoverse/dsh-inline-media-viewer'], '1.0.12')
 assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '~4.0.5')
@@ -99,39 +99,6 @@ assert.deepEqual(
   client.opsFor({ baseURL: 'https://x/v1', model: 'gpt-image-2' }, new Set(['baseURL'])),
   [{ op: 'set', path: ['baseURL'], value: 'https://x/v1' }],
 )
-assert.deepEqual(client.toolArgsOf({ argsRaw: '{"prompt":"画一张图","size":"1024x1024"}' }), {
-  prompt: '画一张图',
-  size: '1024x1024',
-})
-assert.deepEqual(client.toolArgsOf({ argsRaw: 'bad json' }), {})
-assert.deepEqual(client.imageAttachmentsOf({
-  content: [
-    { type: 'text', text: 'done' },
-    { type: 'image', attachment: { attachmentId: 'image-1' } },
-    {
-      type: 'text',
-      text: `<!-- image-gen-attachments-base64:${Buffer.from(JSON.stringify([
-        { attachmentId: 'image-2', mediaType: 'image/png' },
-      ])).toString('base64')} -->`,
-    },
-  ],
-}), [
-  { attachmentId: 'image-1' },
-  { attachmentId: 'image-2', mediaType: 'image/png' },
-])
-assert.equal(
-  client.attachmentUrlOf({
-    attachmentId: `sha256:${'a'.repeat(64)}`,
-    mediaType: 'image/png',
-    bytes: 12,
-    width: 1,
-    height: 1,
-  }),
-  `/image-gen/attachment?id=sha256%3A${'a'.repeat(64)}&mediaType=image%2Fpng&bytes=12&width=1&height=1`,
-)
-assert.equal(client.imageMetaOf([{ width: 768, height: 1024 }], { size: 'portrait' }), '1 张 · 768×1024')
-assert.equal(client.imageFilenameOf({ name: ' image-gen-one.png ' }, 0), 'image-gen-one.png')
-assert.equal(client.imageFilenameOf({ mediaType: 'image/webp' }, 1), 'image-gen-2.webp')
 
 const clientRegistrations = []
 plugin.apply({
@@ -156,9 +123,10 @@ plugin.apply({
   get() { return undefined },
   effect(callback) { return callback() },
 })
+// 图片展示交给通用渲染器：浏览器半不再注册 tool.call.toolview 自绘卡片。
 assert.deepEqual(
-  clientRegistrations.filter(entry => entry.meta.name === 'tool.call.toolview').map(entry => entry.meta.key),
-  ['image-generate', 'image-edit'],
+  clientRegistrations.filter(entry => entry.meta.name === 'tool.call.toolview'),
+  [],
 )
 
 // 关键回归：第三方插件配置页注册进 plugins.row.config，key 必须是 `<包名>#<行 id>`，
@@ -275,10 +243,6 @@ assert.deepEqual(conversationImage, {
   height: 1,
   name: first.split(/[\\/]/).pop(),
 })
-assert.equal(
-  server.__test.attachmentMarkerOf([conversationImage]),
-  `<!-- image-gen-attachments-base64:${Buffer.from(JSON.stringify([conversationImage])).toString('base64')} -->`,
-)
 
 
 // 流式响应和 base64 在分配完整响应体之前受大小限制。
@@ -396,19 +360,6 @@ const httpCtx = {
   },
 }
 const httpCurrent = () => httpValue
-
-// GET attachment 通过插件自有路由读取，不依赖模型视觉能力或会话 image block。
-{
-  const res = fakeRes()
-  await server.handleImageGenHttp(httpCtx, httpCurrent, fakeReq('GET', client.attachmentUrlOf(conversationImage)), res)
-  assert.equal(res.captured.status, 200)
-  assert.equal(res.captured.headers['content-type'], 'image/png')
-  assert.deepEqual(res.captured.body, pngBytes)
-
-  const invalidRes = fakeRes()
-  await server.handleImageGenHttp(httpCtx, httpCurrent, fakeReq('GET', '/image-gen/attachment?id=bad'), invalidRes)
-  assert.equal(invalidRes.captured.status, 400)
-}
 
 // GET state
 {
@@ -541,7 +492,7 @@ webInjection.callback({
 assert.equal(registrations.routes.length, 1)
 assert.equal(registrations.routes[0].path, '/image-gen')
 
-// 工具在未配置接口地址时给出设置指引。
+// 渲染为标准 ImageBlock（dsh-llm ContentBlockMap），通用渲染器自动展示。
 const generateTool = registrations.tools[0]
 const renderedImage = generateTool.output.render({}, {
   mode: 'generate',
@@ -553,14 +504,27 @@ const renderedImage = generateTool.output.render({}, {
   images: [conversationImage],
 })
 assert.equal(renderedImage[0].type, 'text')
-assert.equal(renderedImage.length, 1)
-assert.match(renderedImage[0].text, /<!-- image-gen-attachments-base64:/)
-assert.equal(renderedImage.some(block => block.type === 'image'), false)
+assert.equal(renderedImage.length, 2)
+assert.match(renderedImage[0].text, /图片已保存到 outputs\/image-gen/)
+assert.deepEqual(renderedImage[1], { type: 'image', attachment: conversationImage })
 assert.equal(renderedImage[0].text.includes(first), false)
 assert.equal(renderedImage[0].text.includes(first.split(/[\\/]/).pop()), false)
 assert.equal(renderedImage[0].text.includes('结果卡片'), false)
 assert.equal(renderedImage[0].text.includes('文件名'), false)
-assert.deepEqual(client.imageAttachmentsOf({ content: renderedImage }), [conversationImage])
+// 无附件（超过会话上限）时只返回文本块。
+const renderedNoImage = generateTool.output.render({}, {
+  mode: 'generate',
+  provider: 'image-gen',
+  model: 'gpt-image-2',
+  size: '1024x1024',
+  quality: 'low',
+  files: [first],
+  images: [],
+})
+assert.equal(renderedNoImage.length, 1)
+assert.equal(renderedNoImage[0].type, 'text')
+
+// 工具在未配置接口地址时给出设置指引。
 scopeValue = {}
 await assert.rejects(
   generateTool.execute({ prompt: '猫' }, { signal: { aborted: false } }),

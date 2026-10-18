@@ -33,7 +33,9 @@ text-to-image and image-to-image tools directly in conversation.
 - `image-generate` (text-to-image) tool, generating 1–8 images sequentially.
 - `image-edit` (image-to-image) tool with 1–8 PNG / JPEG / WebP reference images.
 - Adaptive portrait / landscape / square sizes, plus validated custom sizes.
-- Results render inline in conversation with thumbnails, lightbox zoom, and save-as.
+- Results are returned as DSH standard `ImageBlock`s —
+  `{ type: 'image', attachment: { attachmentId, mediaType, bytes, width, height, name } }` —
+  so the generic conversation renderer displays them automatically (no custom tool card).
 - Bundles [`@wisdoverse/dsh-inline-media-viewer`](https://www.npmjs.com/package/@wisdoverse/dsh-inline-media-viewer)
   `1.0.12`: image paths mentioned in replies are rendered as inline images in the
   conversation (mounted as the `inline-media` row through this plugin's bundle patch).
@@ -94,8 +96,9 @@ Layout:
 - `lib/index.js` — Host half: top-level `Config` schema (volatile fields project the
   settings form), `image-gen` settings namespace, `image-generate` / `image-edit`
   tools, `/image-gen/*` HTTP routes.
-- `lib/client.js` — Browser half: `plugins.row.config` config page
-  (key `dsh-image-gen#image-gen`), and `tool.call.toolview` result cards.
+- `lib/client.js` — Browser half: `plugins.row.config` config page only (key
+  `dsh-image-gen#image-gen`); tool results render through the platform's generic
+  image renderer.
 - `cordis.patch.yml` — mounts both halves (entry id `image-gen`) plus the bundled
   inline media viewer (entry id `inline-media`).
 

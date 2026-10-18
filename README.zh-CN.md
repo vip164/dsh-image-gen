@@ -31,7 +31,9 @@
 - 提供 `image-generate` 文生图工具，支持一次顺序生成 1~8 张图片。
 - 提供 `image-edit` 图生图工具，支持 1~8 张 PNG / JPEG / WebP 参考图。
 - 支持自适应横版、竖版和方图，也支持传入符合约束的自定义尺寸。
-- 生成图片直接显示在聊天界面；专用工具卡片支持缩略图、点击放大和"另存为"。
+- 结果以 DSH 标准 `ImageBlock` 返回 ——
+  `{ type: 'image', attachment: { attachmentId, mediaType, bytes, width, height, name } }` ——
+  通用渲染器自动识别并展示图片（无需自绘工具卡片）。
 - 内置引用 [`@wisdoverse/dsh-inline-media-viewer`](https://www.npmjs.com/package/@wisdoverse/dsh-inline-media-viewer)
   `1.0.12`：回复中提到的图片路径会直接在对话里渲染成图片（由本插件的 bundle
   patch 以 `inline-media` 行挂载）。
@@ -95,8 +97,8 @@ pnpm test   # 或 npm test / node tests/plugin.test.mjs
 - `lib/index.js` — host 半：顶层 `Config` schema（volatile 字段自动投影设置表单）、
   settings 命名空间 `image-gen`、`image-generate` / `image-edit` 工具、
   `/image-gen/*` 自有 HTTP 路由。
-- `lib/client.js` — 浏览器半：`plugins.row.config` 配置页（key
-  `dsh-image-gen#image-gen`）、`tool.call.toolview` 结果卡片。
+- `lib/client.js` — 浏览器半：仅注册 `plugins.row.config` 配置页（key
+  `dsh-image-gen#image-gen`）；工具结果由平台通用图片渲染器展示。
 - `cordis.patch.yml` — 把 host / client 两半挂载进组合（entry id `image-gen`），
   并同时挂载内置的内联媒体查看器（entry id `inline-media`）。
 
