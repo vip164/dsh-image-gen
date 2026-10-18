@@ -14,12 +14,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Anyway-one/dsh-image-gen.git"
+    "url": "git+https://github.com/vip164/dsh-image-gen.git"
   },
   "bugs": {
-    "url": "https://github.com/Anyway-one/dsh-image-gen/issues"
+    "url": "https://github.com/vip164/dsh-image-gen/issues"
   },
-  "homepage": "https://github.com/Anyway-one/dsh-image-gen#readme",
+  "homepage": "https://github.com/vip164/dsh-image-gen#readme",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
