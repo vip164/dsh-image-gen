@@ -7,11 +7,23 @@
 [English](./README.md)
 
 > 本插件在 [dsh-image2-draw](https://github.com/JuneLearn/dsh-image2-draw.git)
-> 的基础上重写并修复了一个会导致插件无法加载的关键 bug（见下文“关于 bug 修复”）。
+> 以及 [Anyway-one/dsh-image-gen](https://github.com/Anyway-one/dsh-image-gen.git) 的基础上
+> 重写并修复了一个会导致插件无法加载的关键 bug（见下文"关于 bug 修复"）。
+
+## 兼容性
+
+- 需要 **DeepSeek Harness 0.2.1-rc.2**（peer 依赖精确钉在
+  `@deepseek-ai/dsh-attachment` / `dsh-credentials` / `dsh-settings` / `dsh-tools`
+  `0.2.1-rc.2`，cordis `~4.0.5`）。
+- v0.2.0 已迁移到 0.2.1-rc.2 的插件 API：设置表单由顶层 `Config` schema 的
+  volatile 字段自动投影；配置页改经 `plugins.row.config` 槽注册；凭证读写走新的
+  `remote.credentials` RPC。不再使用已移除的 `settings.plugin.item` 槽、
+  `installSettingsSection` 与 `dsh-client-runtime` 注入。
 
 ## 功能
 
-- 在 **设置 → 插件 → 插件配置** 中提供独立的 **Image Gen** 配置卡片。
+- 在 **插件 → 已安装插件 → dsh-image-gen** 的 `image-gen` 行上点 **配置**，进入
+  独立的 **Image Gen** 配置页。
 - 只需配置 `baseURL` 和 `API Key`；默认模型为 `gpt-image-2`。
 - `baseURL` 可填写 `https://example.com/v1` 这样的简写，插件会自动补全
   `/images/generations`。
@@ -19,7 +31,10 @@
 - 提供 `image-generate` 文生图工具，支持一次顺序生成 1~8 张图片。
 - 提供 `image-edit` 图生图工具，支持 1~8 张 PNG / JPEG / WebP 参考图。
 - 支持自适应横版、竖版和方图，也支持传入符合约束的自定义尺寸。
-- 生成图片直接显示在聊天界面；专用工具卡片支持缩略图、点击放大和“另存为”。
+- 生成图片直接显示在聊天界面；专用工具卡片支持缩略图、点击放大和"另存为"。
+- 内置引用 [`@wisdoverse/dsh-inline-media-viewer`](https://www.npmjs.com/package/@wisdoverse/dsh-inline-media-viewer)
+  `1.0.12`：回复中提到的图片路径会直接在对话里渲染成图片（由本插件的 bundle
+  patch 以 `inline-media` 行挂载）。
 - 图片同时保存到当前会话工作目录的 `outputs/image-gen/`，重名自动编号，不覆盖旧文件。
 - API Key 只写入 DSH credentials（默认引用 `IMAGE_GEN_API_KEY`），不回显、不进设置文档。
 - 对配置写入、响应大小、超时和参考图文件实施校验；524 / 超时不会自动重试，避免重复计费。
@@ -35,11 +50,11 @@
 ### 使用 npx（普通用户推荐）
 
 ```bash
-npx --yes -p @deepseek-ai/dsh dsh plugin --profile web add github:Anyway-one/dsh-image-gen
+npx --yes -p @deepseek-ai/dsh dsh plugin --profile web add github:vip164/dsh-image-gen
 npx --yes -p @deepseek-ai/dsh dsh web
 ```
 
-如需固定到某个版本 tag，可写作 `github:Anyway-one/dsh-image-gen#v0.1.0`。
+如需固定到某个版本 tag，可写作 `github:vip164/dsh-image-gen#v0.2.0`。
 
 也可以从本地目录安装：
 
@@ -51,13 +66,13 @@ npx --yes -p @deepseek-ai/dsh dsh plugin --profile web add /path/to/dsh-image-ge
 
 ```bash
 cd <deepseek-harness>
-pnpm dsh plugin --profile web add github:Anyway-one/dsh-image-gen
+pnpm dsh plugin --profile web add github:vip164/dsh-image-gen
 pnpm dsh web
 ```
 
 ## 配置
 
-1. 打开 **设置 → 插件 → 插件配置**，展开 **Image Gen** 卡片。
+1. 打开 **插件 → 已安装插件 → dsh-image-gen**，在 `image-gen` 行上选择 **配置**。
 2. 填写 **接口地址（baseURL）**，例如 `https://example.com/v1`。
 3. 填写 **API Key**（写入 credentials，默认引用 `IMAGE_GEN_API_KEY`）。
 4. 可选：修改 **模型**（默认 `gpt-image-2`）、**图生图端点**、**超时**。
@@ -77,11 +92,13 @@ pnpm test   # 或 npm test / node tests/plugin.test.mjs
 
 代码结构：
 
-- `lib/index.js` — host 半：settings 命名空间 `image-gen`、`image-generate` /
-  `image-edit` 工具、`/image-gen/*` 自有 HTTP 路由。
-- `lib/client.js` — 浏览器半：`settings.plugin.item` 配置卡片（keyed 注册）、
-  `tool.call.toolview` 结果卡片。
-- `cordis.patch.yml` — 把 host / client 两半挂载进组合（entry id `image-gen`）。
+- `lib/index.js` — host 半：顶层 `Config` schema（volatile 字段自动投影设置表单）、
+  settings 命名空间 `image-gen`、`image-generate` / `image-edit` 工具、
+  `/image-gen/*` 自有 HTTP 路由。
+- `lib/client.js` — 浏览器半：`plugins.row.config` 配置页（key
+  `dsh-image-gen#image-gen`）、`tool.call.toolview` 结果卡片。
+- `cordis.patch.yml` — 把 host / client 两半挂载进组合（entry id `image-gen`），
+  并同时挂载内置的内联媒体查看器（entry id `inline-media`）。
 
 ## License
 

@@ -1,4 +1,7 @@
-# Mount the host and Web client halves of the image generation plugin.
+# Mount the host and Web client halves of the image generation plugin, plus the
+# inline media viewer that renders image paths mentioned in replies as in-chat previews.
 - insert:
     - id: image-gen
       name: dsh-image-gen
+    - id: inline-media
+      name: "@wisdoverse/dsh-inline-media-viewer"
