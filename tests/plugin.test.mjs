@@ -16,7 +16,7 @@ assert.equal(manifest.dsh.client.platform, 'web')
 assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-plugin-manager'), true)
 assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-tool'), false)
 assert.equal(manifest.dependencies['@deepseek-ai/schemastery'], '~3.18.5')
-assert.equal(manifest.dependencies['@wisdoverse/dsh-inline-media-viewer'], '1.0.12')
+assert.equal(manifest.dependencies['@wisdoverse/dsh-inline-media-viewer'], undefined)
 assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '~4.0.5')
 // 结果图展示走 read_image（dsh-image2-tool 机制），不依赖 dsh-attachment。
 assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-attachment'], undefined)
@@ -25,13 +25,10 @@ assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-settings'], '0.2.1-rc.2
 assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-tools'], '0.2.1-rc.2')
 assert.equal(
   (await readFile(new URL('../cordis.patch.yml', import.meta.url), 'utf8')).replaceAll('\r\n', '\n'),
-  '# Mount the host and Web client halves of the image generation plugin, plus the\n'
-    + '# inline media viewer that renders image paths mentioned in replies as in-chat previews.\n'
+  '# Mount the host and Web client halves of the image generation plugin.\n'
     + '- insert:\n'
     + '    - id: image-gen\n'
-    + '      name: dsh-image-gen\n'
-    + '    - id: inline-media\n'
-    + '      name: "@wisdoverse/dsh-inline-media-viewer"\n',
+    + '      name: dsh-image-gen\n',
 )
 
 /* ---------------------------- 浏览器半 ---------------------------- */

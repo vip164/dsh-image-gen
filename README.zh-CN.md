@@ -34,11 +34,9 @@
 - 结果展示采用与
   [dsh-image2-tool](https://github.com/544244857/dsh-image2-plugin)
   相同的机制：结果文本给出保存的相对路径（`outputs/image-gen/…`），模型按指引
-  调用内置 `read_image` 检查并展示输出——`read_image` 是 DSH 内置的带图卡片，
-  不保存会话附件、不自建图片视图。
-- 内置引用 [`@wisdoverse/dsh-inline-media-viewer`](https://www.npmjs.com/package/@wisdoverse/dsh-inline-media-viewer)
-  `1.0.12`：回复中提到的图片路径会直接在对话里渲染成图片（由本插件的 bundle
-  patch 以 `inline-media` 行挂载）。
+  调用内置 `read_image` 检查输出（DSH 内置的带图卡片），并在回复末尾附上指向
+  结果图的 markdown 链接——点击即可在侧边栏预览原图。不保存会话附件、
+  不自建图片视图、不依赖内联预览组件。
 - 图片同时保存到当前会话工作目录的 `outputs/image-gen/`，重名自动编号，不覆盖旧文件。
 - API Key 只写入 DSH credentials（默认引用 `IMAGE_GEN_API_KEY`），不回显、不进设置文档。
 - 对配置写入、响应大小、超时和参考图文件实施校验；524 / 超时不会自动重试，避免重复计费。

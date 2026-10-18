@@ -46,8 +46,7 @@
     "node": ">=20"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "~3.18.5",
-    "@wisdoverse/dsh-inline-media-viewer": "1.0.12"
+    "@deepseek-ai/schemastery": "~3.18.5"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "~4.0.5",

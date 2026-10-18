@@ -35,13 +35,11 @@ text-to-image and image-to-image tools directly in conversation.
 - Adaptive portrait / landscape / square sizes, plus validated custom sizes.
 - Result display follows the same mechanism as
   [dsh-image2-tool](https://github.com/544244857/dsh-image2-plugin): the result
-  text carries the saved relative path (`outputs/image-gen/…`) and the model is
-  instructed to call the built-in `read_image` to inspect and show the output —
-  `read_image` ships DSH's built-in image card; no session attachments, no
-  custom image view.
-- Bundles [`@wisdoverse/dsh-inline-media-viewer`](https://www.npmjs.com/package/@wisdoverse/dsh-inline-media-viewer)
-  `1.0.12`: image paths mentioned in replies are rendered as inline images in the
-  conversation (mounted as the `inline-media` row through this plugin's bundle patch).
+  text carries the saved relative path (`outputs/image-gen/…`), the model is
+  instructed to inspect the output with the built-in `read_image` (DSH's
+  built-in image card) and append a markdown link to the result image —
+  clicking it previews the image in the sidebar. No session attachments, no
+  custom image view, no inline preview dependency.
 - Images are also written to `outputs/image-gen/` in the session working directory
   (auto-numbered, never overwriting existing files).
 - API Key is written only to DSH credentials (default ref `IMAGE_GEN_API_KEY`); it is
