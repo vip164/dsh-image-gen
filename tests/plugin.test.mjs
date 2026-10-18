@@ -18,7 +18,8 @@ assert.equal(manifest.dsh.client.inject.includes('@deepseek-ai/dsh-client-ui-too
 assert.equal(manifest.dependencies['@deepseek-ai/schemastery'], '~3.18.5')
 assert.equal(manifest.dependencies['@wisdoverse/dsh-inline-media-viewer'], '1.0.12')
 assert.equal(manifest.peerDependencies['@deepseek-ai/cordis'], '~4.0.5')
-assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-attachment'], '0.2.1-rc.2')
+// 结果图展示走 read_image（dsh-image2-tool 机制），不依赖 dsh-attachment。
+assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-attachment'], undefined)
 assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-credentials'], '0.2.1-rc.2')
 assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-settings'], '0.2.1-rc.2')
 assert.equal(manifest.peerDependencies['@deepseek-ai/dsh-tools'], '0.2.1-rc.2')
@@ -123,7 +124,7 @@ plugin.apply({
   get() { return undefined },
   effect(callback) { return callback() },
 })
-// 图片展示交给通用渲染器：浏览器半不再注册 tool.call.toolview 自绘卡片。
+// keyed 工具视图已移除：结果文本给出保存路径，由内置 read_image 展示结果图。
 assert.deepEqual(
   clientRegistrations.filter(entry => entry.meta.name === 'tool.call.toolview'),
   [],
@@ -209,40 +210,6 @@ assert.equal(existsSync(first), true)
 const second = server.saveBlob(pngBytes, outputDir, {})
 assert.match(second, /image-gen-\d{8}-\d{6}-2\.png$/)
 assert.equal(readdirSync(outputDir).length, 2)
-
-const attachmentSaves = []
-const testAttachmentId = `sha256:${'a'.repeat(64)}`
-const attachmentCtx = {
-  get(service) {
-    if (service !== 'attachments') return undefined
-    return {
-      imageLimits: { maxImageBytes: 1024 },
-      async saveImage(input) {
-        attachmentSaves.push(input)
-        return {
-          attachmentId: testAttachmentId,
-          mediaType: input.mediaType,
-          bytes: input.data.byteLength,
-          width: 1,
-          height: 1,
-          name: input.name,
-        }
-      },
-    }
-  },
-  logger: { warn() {} },
-}
-const conversationImage = await server.__test.saveConversationImage(attachmentCtx, pngBytes, first)
-assert.equal(attachmentSaves.length, 1)
-assert.equal(attachmentSaves[0].mediaType, 'image/png')
-assert.deepEqual(conversationImage, {
-  attachmentId: testAttachmentId,
-  mediaType: 'image/png',
-  bytes: pngBytes.length,
-  width: 1,
-  height: 1,
-  name: first.split(/[\\/]/).pop(),
-})
 
 
 // 流式响应和 base64 在分配完整响应体之前受大小限制。
@@ -492,37 +459,21 @@ webInjection.callback({
 assert.equal(registrations.routes.length, 1)
 assert.equal(registrations.routes[0].path, '/image-gen')
 
-// 渲染为标准 ImageBlock（dsh-llm ContentBlockMap），通用渲染器自动展示。
+// 结果渲染为纯文本：给出保存的相对路径，模型按指引调用内置 read_image 展示结果图。
 const generateTool = registrations.tools[0]
-const renderedImage = generateTool.output.render({}, {
+const renderedOutcome = generateTool.output.render({}, {
   mode: 'generate',
   provider: 'image-gen',
   model: 'gpt-image-2',
   size: '1024x1024',
   quality: 'low',
   files: [first],
-  images: [conversationImage],
+  saved: ['outputs/image-gen/image-gen-test.png'],
 })
-assert.equal(renderedImage[0].type, 'text')
-assert.equal(renderedImage.length, 2)
-assert.match(renderedImage[0].text, /图片已保存到 outputs\/image-gen/)
-assert.deepEqual(renderedImage[1], { type: 'image', attachment: conversationImage })
-assert.equal(renderedImage[0].text.includes(first), false)
-assert.equal(renderedImage[0].text.includes(first.split(/[\\/]/).pop()), false)
-assert.equal(renderedImage[0].text.includes('结果卡片'), false)
-assert.equal(renderedImage[0].text.includes('文件名'), false)
-// 无附件（超过会话上限）时只返回文本块。
-const renderedNoImage = generateTool.output.render({}, {
-  mode: 'generate',
-  provider: 'image-gen',
-  model: 'gpt-image-2',
-  size: '1024x1024',
-  quality: 'low',
-  files: [first],
-  images: [],
-})
-assert.equal(renderedNoImage.length, 1)
-assert.equal(renderedNoImage[0].type, 'text')
+assert.equal(renderedOutcome.length, 1)
+assert.equal(renderedOutcome[0].type, 'text')
+assert.match(renderedOutcome[0].text, /图片已保存：outputs\/image-gen\/image-gen-test\.png/)
+assert.equal(renderedOutcome.some(block => block.type === 'image'), false)
 
 // 工具在未配置接口地址时给出设置指引。
 scopeValue = {}
@@ -545,7 +496,7 @@ await assert.rejects(
   /count 必须是 1~8/,
 )
 
-// 完整生成链会同时落盘、保存附件并返回 image block 所需引用。
+// 完整生成链落盘并在结果里给出相对保存路径。
 scopeValue = { baseURL: 'https://x/v1', apiKey: 'sk-test' }
 const fetchBeforeGenerate = globalThis.fetch
 globalThis.fetch = async () => new Response(JSON.stringify({
@@ -559,8 +510,9 @@ try {
     },
   })
   assert.equal(generated.files.length, 1)
-  assert.equal(generated.images.length, 1)
-  assert.equal(generated.images[0].attachmentId, testAttachmentId)
+  assert.equal(generated.saved.length, 1)
+  assert.match(generated.saved[0], /outputs\/image-gen\/image-gen-\d{8}-\d{6}\.png$/)
+  assert.equal(existsSync(join(outputDir, generated.saved[0])), true)
 } finally {
   globalThis.fetch = fetchBeforeGenerate
 }
